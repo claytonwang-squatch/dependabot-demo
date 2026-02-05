@@ -1,0 +1,16 @@
+name: 'GitHub Script'
+description: 'Wrapper for actions/github-script with pinned hash'
+
+inputs:
+  script:
+    description: 'JavaScript code to execute'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Run GitHub script
+      id: composite-script-step
+      uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7 -> v7.1.0
+      with:
+        script: ${{ inputs.script }}

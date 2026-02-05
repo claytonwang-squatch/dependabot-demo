@@ -1,0 +1,178 @@
+name: Codebase Lint Check
+
+# This workflow is used to check the codebase for lint issues and create an issue if any are found.
+
+on:
+  schedule:
+    # Run daily at 6 AM UTC
+    - cron: '0 6 * * *'
+  workflow_dispatch: # Allow manual triggering
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  codebase-lint:
+    name: Full Codebase Lint Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4 -> v4.3.1
+
+      - uses: ./.github/actions/_setup-node
+        with:
+          node-version: 'lts/*'
+          check-latest: true
+
+      - name: Cache node modules
+        id: cache-npm
+        uses: ./.github/actions/_cache
+        env:
+          cache-name: cache-node-modules
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-build-${{ env.cache-name }}-
+            ${{ runner.os }}-build-
+            ${{ runner.os }}-
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run full codebase lint
+        id: lint
+        run: |
+          echo "Running full codebase lint check..."
+          npm run lint 2>&1 | tee lint-output.txt
+
+          # Check if lint output contains errors (look for the ✖ symbol or error count)
+          if grep -q "✖.*error" lint-output.txt || grep -q "error" lint-output.txt; then
+            echo "lint_success=false" >> $GITHUB_OUTPUT
+            echo "Lint errors detected"
+          else
+            echo "lint_success=true" >> $GITHUB_OUTPUT
+            echo "No lint errors found"
+          fi
+
+      - name: Check for existing lint issue
+        id: existing_issue
+        if: always()
+        uses: ./.github/actions/_github-script
+        with:
+          script: |
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: ['lint-check', 'automated'],
+              state: 'open'
+            });
+
+            const existingIssue = issues.data.find(issue =>
+              issue.title.includes('Codebase Lint Issues Detected')
+            );
+
+            if (existingIssue) {
+              core.setOutput('issue_number', existingIssue.number);
+              core.setOutput('has_existing_issue', 'true');
+            } else {
+              core.setOutput('has_existing_issue', 'false');
+            }
+
+      - name: Close existing issue if lint passes
+        # https://github.com/github/vscode-github-actions/issues/222
+        if: steps.lint.outputs.lint_success == 'true' && steps.existing_issue.outputs.has_existing_issue == 'true'
+        uses: ./.github/actions/_github-script
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: ${{ steps.existing_issue.outputs.issue_number }},
+              body: `✅ **Lint Check Passed**
+
+              The scheduled codebase lint check has passed! All lint issues have been resolved.
+
+              **Run Details:**
+              - Workflow: ${{ github.workflow }}
+              - Run ID: ${{ github.run_id }}
+              - Commit: ${{ github.sha }}
+              - Date: ${{ github.event.repository.updated_at }}`
+            });
+
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: ${{ steps.existing_issue.outputs.issue_number }},
+              state: 'closed'
+            });
+
+      - name: Create or update issue if lint fails
+        if: steps.lint.outputs.lint_success == 'false'
+        uses: ./.github/actions/_github-script
+        with:
+          script: |
+            const fs = require('fs');
+            let lintOutput = '';
+
+            try {
+              lintOutput = fs.readFileSync('lint-output.txt', 'utf8');
+            } catch (error) {
+              lintOutput = 'Unable to read lint output';
+            }
+
+            // Truncate if too long (GitHub has limits)
+            if (lintOutput.length > 50000) {
+              lintOutput = lintOutput.substring(0, 50000) + '\n\n... (output truncated)';
+            }
+
+            const issueBody = `🚨 **Codebase Lint Issues Detected**
+
+            The scheduled codebase lint check has found ESLint violations that need attention.
+
+            **Run Details:**
+            - Workflow: ${{ github.workflow }}
+            - Run ID: ${{ github.run_id }}
+            - Commit: ${{ github.sha }}
+            - Date: ${new Date().toISOString()}
+
+            **Lint Output:**
+            \`\`\`
+            ${lintOutput}
+            \`\`\`
+
+            **How to Fix:**
+            1. Run \`npm run lint\` locally to see the issues
+            2. Fix the lint violations or update ESLint configuration if needed
+            3. The next scheduled check will automatically close this issue if all problems are resolved
+
+            **Note:** This issue was automatically created by the codebase lint check workflow.`;
+
+            const existingIssueNumber = '${{ steps.existing_issue.outputs.issue_number }}';
+            const hasExistingIssue = '${{ steps.existing_issue.outputs.has_existing_issue }}' === 'true';
+
+            if (hasExistingIssue) {
+              // Update existing issue
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: parseInt(existingIssueNumber),
+                body: `🔄 **Updated Lint Check Results**
+
+                The codebase still has lint issues. See updated output below:
+
+                **Lint Output:**
+                \`\`\`
+                ${lintOutput}
+                \`\`\``
+              });
+            } else {
+              // Create new issue
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: 'Codebase Lint Issues Detected',
+                body: issueBody,
+                labels: ['lint-check', 'automated', 'bug']
+              });
+            }

@@ -1,0 +1,59 @@
+name: 'New Relic Deployment Marker'
+description: 'Wrapper for newrelic/deployment-marker-action with pinned hash'
+
+inputs:
+  apiKey:
+    description: 'New Relic API key'
+    required: true
+  commandType:
+    description: 'Command type'
+    required: false
+    default: 'changeTrackingCreateDeployment'
+  guid:
+    description: 'New Relic entity GUID'
+    required: true
+  region:
+    description: 'New Relic region (US or EU)'
+    required: false
+    default: 'US'
+  version:
+    description: 'Deployment version'
+    required: false
+    default: ${{ github.sha }}
+  user:
+    description: 'User creating deployment'
+    required: false
+    default: ${{ github.actor }}
+  description:
+    description: 'Deployment description'
+    required: false
+    default: ''
+  changelog:
+    description: 'Changelog URL'
+    required: false
+    default: ''
+  deploymentType:
+    description: 'Deployment type (ROLLING, BLUE_GREEN, etc.)'
+    required: false
+    default: 'ROLLING'
+  groupid:
+    description: 'Group ID for related deployments'
+    required: false
+    default: ''
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Create deployment marker
+      uses: newrelic/deployment-marker-action@d88a59ea8f713ad6935e60de27273157790b1e3b # v2.6.2
+      with:
+        apiKey: ${{ inputs.api-key }}
+        commandType: ${{ inputs.command-type }}
+        guid: ${{ inputs.guid }}
+        region: ${{ inputs.region }}
+        version: ${{ inputs.version }}
+        user: ${{ inputs.user }}
+        description: ${{ inputs.description }}
+        changelog: ${{ inputs.changelog }}
+        deploymenttype: ${{ inputs.deployment-type }}
+        groupid: ${{ inputs.group-id }}
