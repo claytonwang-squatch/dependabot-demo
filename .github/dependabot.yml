@@ -1,17 +1,15 @@
----
 version: 2
 updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
-    commit-message:
-      prefix: "ci"
-    open-pull-requests-limit: 5
+    
+    allow:
+      - dependency-type: "all"
+        update-types: ["version-update:semver-minor", "version-update:semver-patch"]
+
     groups:
-      github-actions:
+      github-actions-dependencies:
         patterns:
           - "*"
-        update-types:
-          - "minor"  # Same behavior as @v4 tag
-          - "patch"
