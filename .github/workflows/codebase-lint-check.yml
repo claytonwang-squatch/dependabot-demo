@@ -19,14 +19,14 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4 -> v4.3.1
 
-      - uses: ./.github/actions/_setup-node
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4 -> v4.4.0
         with:
           node-version: 'lts/*'
           check-latest: true
 
       - name: Cache node modules
         id: cache-npm
-        uses: ./.github/actions/_cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         env:
           cache-name: cache-node-modules
         with:
@@ -58,7 +58,7 @@ jobs:
       - name: Check for existing lint issue
         id: existing_issue
         if: always()
-        uses: ./.github/actions/_github-script
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7 -> v7.1.0
         with:
           script: |
             const issues = await github.rest.issues.listForRepo({
@@ -82,7 +82,7 @@ jobs:
       - name: Close existing issue if lint passes
         # https://github.com/github/vscode-github-actions/issues/222
         if: steps.lint.outputs.lint_success == 'true' && steps.existing_issue.outputs.has_existing_issue == 'true'
-        uses: ./.github/actions/_github-script
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7 -> v7.1.0
         with:
           script: |
             await github.rest.issues.createComment({
@@ -109,7 +109,7 @@ jobs:
 
       - name: Create or update issue if lint fails
         if: steps.lint.outputs.lint_success == 'false'
-        uses: ./.github/actions/_github-script
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7 -> v7.1.0
         with:
           script: |
             const fs = require('fs');
